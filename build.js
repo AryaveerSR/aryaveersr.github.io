@@ -1,14 +1,14 @@
 import path from "path";
 import fs from "node:fs/promises";
+import { readdir } from "fs";
 
 const LIVE_SERVER_PORT = 8181;
 const WEB_SOCKET_PORT = 8182;
+const OUT_DIR = path.join(__dirname, ".build", "dist");
+const SRC_DIR = path.join(__dirname, "src");
+const POSTS_DIR = path.join(__dirname, "posts");
 
-/* class ElementHandler {
-  element(element) {
-    console.log(element);
-  }
-}
+/* 
 
 let test = await Bun.file("./src/index.html").text();
 let resp = new HTMLRewriter()
@@ -28,10 +28,67 @@ let resp = new HTMLRewriter()
 if (Bun.argv[2] && Bun.argv[2] == "watch") {
   await watch();
 } else {
-  build();
+  await build();
 }
 
-function build() {}
+async function build() {
+  async function processRoute(route) {
+    let full_route = path.join(SRC_DIR, route);
+    let stat = await fs.stat(full_route);
+
+    if (stat.isDirectory()) {
+      let dir = await fs.readdir(full_route);
+      dir.forEach((item) => processRoute(path.join(route, item)));
+    } else {
+      let parsed_route = path.parse(route);
+
+      if (parsed_route.name[0] == "_") {
+        if (parsed_route.name == "_post") {
+          let posts_html_template = await Bun.file(
+            path.join(SRC_DIR, route)
+          ).text();
+          let posts = await fs.readdir(POSTS_DIR);
+
+          posts.forEach(async (post) => {
+            let file_path = path.join(POSTS_DIR, post);
+            let title = path.parse(file_path).name;
+            let body = await Bun.file(file_path).text();
+
+            let output = await new HTMLRewriter()
+              .on("*", {
+                element(el) {
+                  let slot = el.getAttribute("slot");
+
+                  if (slot) {
+                    el.removeAttribute("slot");
+
+                    if (slot == "title") {
+                      el.setInnerContent(title);
+                    } else if (slot == "body") {
+                      el.setInnerContent(body, { html: true });
+                    }
+                  }
+                },
+              })
+              .transform(new Response(posts_html_template))
+              .text();
+
+            let out_path = path.join(OUT_DIR, route, "..", `${title}.html`);
+            Bun.write(out_path, output);
+          });
+        }
+      } else {
+        Bun.write(
+          path.join(OUT_DIR, route),
+          Bun.file(path.join(SRC_DIR, route))
+        );
+      }
+    }
+  }
+
+  await fs.rm(OUT_DIR, { recursive: true, force: true });
+  processRoute(".");
+}
 
 async function watch() {
   let live_reload_script = (

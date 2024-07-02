@@ -1,0 +1,20 @@
+body {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  place-content: center;
+}
+
+main {
+  max-width: 540px;
+  margin-block: auto;
+}
+
+footer {
+  padding-block: 1rem;
+  text-align: center;
+}
+
+p {
+  max-width: 540px;
+  text-align: left;
+}

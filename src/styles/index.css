@@ -1,12 +1,18 @@
 body {
   display: grid;
   grid-template-rows: 1fr auto;
-  place-content: center;
+  justify-content: center;
 }
 
 main {
-  max-width: 540px;
-  margin-block: auto;
+  width: 540px;
+  margin-top: 16vh;
+}
+
+@media screen and (max-width: 700px) {
+  main {
+    width: 80vw;
+  }
 }
 
 footer {
@@ -15,6 +21,5 @@ footer {
 }
 
 p {
-  max-width: 540px;
   text-align: left;
 }

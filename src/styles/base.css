@@ -35,6 +35,12 @@ h1 {
   font-size: 4rem;
 }
 
+@media screen and (max-width: 700px) {
+  h1 {
+    font-size: 3rem;
+  }
+}
+
 a {
   color: var(--text-color);
   text-decoration-style: dotted;

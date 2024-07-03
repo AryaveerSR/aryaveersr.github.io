@@ -12,6 +12,9 @@ const POSTS_DIR = path.join(__dirname, "posts");
 const POST_TEMPLATE = path.join(SRC_DIR, "posts", "_post.html");
 const POST_OUTPUT = path.join(OUT_DIR, "posts");
 
+const POST_INDEX = path.join(SRC_DIR, "posts", "_index.html");
+const POST_INDEX_OUTPUT = path.join(OUT_DIR, "posts", "index.html");
+
 interface IPost {
   title: string;
   body: string;
@@ -118,11 +121,46 @@ namespace Build {
     post_generator.generate_post(post);
   }
 
+  async function get_posts() {
+    let posts = await fs.readdir(POSTS_DIR);
+    let posts_array: IPost[] = [];
+
+    for (const relative_path of posts) {
+      let post = await new PostParser(relative_path).parse();
+      posts_array.push(post);
+    }
+
+    return posts_array;
+  }
+
+  export async function generate_post_index() {
+    let posts = await get_posts();
+
+    let html = posts
+      .map((post) => `<li><a href="/posts/${post.slug}">${post.title}</a></li>`)
+      .join("\n");
+
+    let template = await Bun.file(POST_INDEX).text();
+
+    let file_contents = await new HTMLRewriter()
+      .on("c-posts", {
+        element(element) {
+          element.setInnerContent(html, { html: true });
+          element.removeAndKeepContent();
+        },
+      })
+      .transform(new Response(template))
+      .text();
+
+    await Bun.write(POST_INDEX_OUTPUT, file_contents);
+  }
+
   export async function build() {
     await fs.rm(OUT_DIR, { recursive: true, force: true });
 
     await process_route(".");
     await generate_posts();
+    await generate_post_index();
   }
 }
 
@@ -159,7 +197,7 @@ namespace Watch {
         let path_name = new URL(req.url).pathname;
         let route = path.join(SRC_DIR, path_name);
 
-        if (path_name.startsWith("/posts/")) {
+        if (path_name.startsWith("/posts")) {
           route = path.join(OUT_DIR, path_name);
         }
 
@@ -175,6 +213,7 @@ namespace Watch {
 
   async function start_live_reload() {
     await Build.generate_posts();
+    await Build.generate_post_index();
 
     let server = Bun.serve({
       fetch(req, server) {
@@ -197,11 +236,14 @@ namespace Watch {
     await post_generator.init();
 
     fs_watch(SRC_DIR, { recursive: true }, async (_, filename) => {
-      if (path.parse(filename!).name == "_post") {
+      let file_name = path.parse(filename!).name;
+      if (file_name == "_post") {
         await Build.generate_posts();
 
         post_generator = new PostGenerator();
         await post_generator.init();
+      } else if (file_name == "_index") {
+        await Build.generate_post_index();
       }
 
       server.publish("live_reload", `reload`);

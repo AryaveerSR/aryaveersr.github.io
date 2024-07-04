@@ -1,0 +1,174 @@
+<c-post
+  title="Building a single-file static site generator"
+  slot="building-my-own-ssg"
+>
+  <p>
+    Site generators are a fairly popular way to spin up a new blog, especially
+    for developers. So when I decided to start this blog, they felt like the
+    easiest route to go with.
+  </p>
+  <p>
+    However, when I started looking deeper into the
+    <a href="https://jamstack.org/generators/">options,</a> I was immediately
+    overwhelmed with the sheer number of choices. Besides, there was what I
+    would consider an outrageous amount of boilerplate involved for something
+    that is practically just spitting html files.
+    <a href="https://www.getzola.org">Zola</a> felt like an exception, but it
+    had an entire templating system learn. All of this led to me deciding to
+    write my own static site generator.
+  </p>
+
+  <section>
+    <h2>Meet HTMLRewriter (and bun)</h2>
+    <p>
+      In a completely unrelated incident, I was trying out
+      <a href="https://bun.sh">bun</a>, a project that replaces like 10
+      different things. It is a package manager, bundler, test runner, and has a
+      bunch of useful libraries, including one
+      <a href="https://bun.sh/docs/api/html-rewriter">HTMLRewriter. </a>
+    </p>
+    <p>
+      It is a native implementation of Cloudflare's
+      <a
+        href="https://developers.cloudflare.com/workers/runtime-apis/html-rewriter/"
+        >HTMLRewriter</a
+      >
+      for its workers, and was a god-send for this project. It is (usually) used
+      to modify html responses before sending them off to the client, and thus
+      can parse and modify html using a neat event-based API.
+    </p>
+    <script src="https://gist.github.com/AryaveerSR/f8d3355d19cbc7dc0d0e4815f7ab691d.js"></script>
+    <p>
+      This was available as a global class in all bun scripts. I'm slightly
+      puzzled by why such specific API is global, and not hidden behind a
+      <code>bun:html</code> import or something, but if it works, it works.
+    </p>
+    <p>
+      Obviously, it was here that I decided to set a completely unnecessary goal
+      to write the entire generator in a single file.
+    </p>
+  </section>
+
+  <section>
+    <h2>HTML Everywhere</h2>
+    <p>
+      Soon after deciding to use HTML for in all the templates, I was faced with
+      the question of storing content. Sure I can go the tried-and-tested route
+      of markdown files, but again, my brain had the idea to use html for this
+      too.
+    </p>
+    <p>
+      Unlike other questionable decisions I made while building this, this was a
+      great choice. HTML has a ton of sematic tags that would barely complicate
+      the markup, and I could add complex features like interactive content, by
+      just writing good ol' html.
+    </p>
+    <p>The tech stack is looking great.</p>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <section>
+      <h3>Content structure</h3>
+      <p>
+        The posts are stored in the /posts directory, and have a simple html
+        structure:
+      </p>
+      <script src="https://gist.github.com/AryaveerSR/c4414a57534b23f45a32277762da1fd8.js"></script>
+      <p>
+        That's it. The <code>c-post</code> wrapper can take additional
+        parameters like a slug and (in future) other metadata. Besides that,
+        it's just the html you know and love.
+      </p>
+      <p>
+        In the build file, it is parsed by the <code>PostParser</code> class.
+        It's a class and has some boilerplate, but it all boils down to this:
+      </p>
+      <script src="https://gist.github.com/AryaveerSR/0662bf0fb7d3da8981a4b5c3995015bf.js"></script>
+      <p>
+        which I think we can all agree, is very simple for something that
+        requires installing no modules.
+      </p>
+    </section>
+
+    <section>
+      <h3>Live server and reloading</h3>
+      <p>
+        The live server code is another part where bun shines. Admittedly, the
+        logic behind the server is very simple, but bun somehow makes it even
+        easier.
+      </p>
+      <p>
+        In summary, the live server acts as a simple file server that injects a
+        simple script into each html file it serves:
+      </p>
+      <script src="https://gist.github.com/AryaveerSR/b3430be3504e14c0153a631e285d8ec6.js"></script>
+      <p>
+        In the code, its minified into a single-line string that also replaces
+        <code>PORT</code> with the actual port. This script establishes a
+        websocket connection with the server and waits for a message to reload
+        when a file is changed. The server was also extremely easy to setup:
+      </p>
+      <script src="https://gist.github.com/AryaveerSR/81b391a1e1271563cb8e06c8eca0e1e8.js"></script>
+      <p>
+        To trigger a reload, we just need to publish a message in the
+        <code>live_reload</code> channel. This is done in the body of callbacks
+        passed to the <code>fs.watch()</code> function, which watches (duh) the
+        file for changes. The use of channels also allows us to open multiple
+        pages of the website simultaneously, and have them all reload on change.
+      </p>
+    </section>
+  </section>
+
+  <section>
+    <h2>The not-so-happy parts</h2>
+    <section>
+      <h3>HTMLRewriter input types</h3>
+      <p>
+        One little issue I had with <code>HTMLRewriter</code> was the fact that
+        it worked on
+        <a href="https://developer.mozilla.org/en-US/docs/Web/API/Response"
+          ><code>Response</code></a
+        >
+        objects, so parsing code looked a little like this:
+      </p>
+      <figure>
+        <script src="https://gist.github.com/AryaveerSR/f8d3355d19cbc7dc0d0e4815f7ab691d.js"></script>
+        <figcaption>(yes, I'm reusing the same snippet from above)</figcaption>
+      </figure>
+      <p>
+        which is not ideal, but not a pain either. It does accept a
+        <code>Blob</code> or a <code>Bun.BufferSource</code>, but I'm not sure
+        how to convert a <code>Bun.file</code> to either of those, or if there
+        are even any performance gains from this.
+      </p>
+    </section>
+
+    <section>
+      <h3>Documentation</h3>
+      <p>
+        Bun is a shiny new tool that's already making great strides. But like
+        anything new, it does not boast a good base of Stackoverflow questions
+        like javascript, and you are left to figure things out yourselves. Bun
+        has <a href="https://bun.sh/guides">guides,</a> which I found very
+        useful.
+      </p>
+    </section>
+  </section>
+
+  <section>
+    <h2>Closing</h2>
+    <p>
+      To put it shortly, writing the generator was a fun weekend project that's
+      completely fine for my small site. However, if it motivates you to write
+      your own, please preserve your sanity and do not impose stupid goals on
+      yourself, like I did.
+    </p>
+    <p>
+      This is also my second post on this blog, and I appreciate any feedback
+      over at <a href="mailto:me.aryaveer@gmail.com">me.aryaveer@gmail.com</a>.
+      I already have ideas for future posts, including a more in-depth post
+      about <code>HTMLRewriter</code> and bun tooling in general. Cya :)
+    </p>
+  </section>
+</c-post>

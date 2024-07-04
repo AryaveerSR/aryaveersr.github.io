@@ -91,6 +91,15 @@ let CPostIndex = {
   },
 };
 
+let CInsertAnalytics = {
+  element(element: HTMLRewriterTypes.Element) {
+    element.append(
+      `<script defer src="https://cloud.umami.is/script.js" data-website-id="4d03fa27-c34a-4fb4-a74e-720a73fb35a1"></script>`,
+      { html: true }
+    );
+  },
+};
+
 async function generate_posts_array() {
   let posts_paths = await fs.readdir(POSTS_DIR);
   let posts: IPost[] = [];
@@ -139,6 +148,7 @@ namespace Build {
 
     let output_contents = await new HTMLRewriter()
       .on(`[slot="post-index"]`, CPostIndex)
+      .on("head", CInsertAnalytics)
       .transform(new Response(file_contents))
       .text();
 

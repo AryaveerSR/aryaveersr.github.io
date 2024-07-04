@@ -106,7 +106,7 @@ async function generate_posts_array() {
 let posts = await generate_posts_array();
 
 namespace Build {
-  async function process_route(relative_path: string) {
+  export async function process_route(relative_path: string) {
     let absolute_path = path.join(SRC_DIR, relative_path);
     let stat = await fs.stat(absolute_path);
 
@@ -226,10 +226,7 @@ namespace Watch {
     });
 
     fs_watch(SRC_DIR, { recursive: true }, async (_, filename) => {
-      let file_name = path.parse(filename!).name;
-      if (file_name == "_post") {
-        await Build.generate_posts();
-      }
+      await Build.process_route(filename!);
 
       server.publish("live_reload", `reload`);
     });
@@ -239,6 +236,7 @@ namespace Watch {
       await Build.generate_posts();
 
       await Build.build_html(path.join("posts", "index.html"));
+      await Build.build_html(path.join("index.html"));
 
       server.publish("live_reload", `reload`);
     });

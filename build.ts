@@ -58,6 +58,7 @@ class PostGenerator {
 
   async generate_post(post: IPost) {
     let file_contents = await new HTMLRewriter()
+      .on("head", CInsertAnalytics)
       .on("[slot]", {
         element(element) {
           let slot_for = element.getAttribute("slot");

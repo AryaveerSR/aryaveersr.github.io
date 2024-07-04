@@ -1,5 +1,6 @@
 :root {
   --background: hsl(55, 42%, 94%);
+  --raised-background: hsl(55, 42%, 90%);
   --heading-color: hsl(0, 0%, 20%);
   --text-color: hsl(0, 0%, 25%);
   --faded-color: hsl(0, 0%, 40%);
@@ -39,13 +40,21 @@ h2 {
   font-size: 2rem;
 }
 
+h3 {
+  font-size: 1.5rem;
+}
+
 @media screen and (max-width: 700px) {
   h1 {
     font-size: 3rem;
   }
 
   h2 {
-    font-size: 1rem;
+    font-size: 2rem;
+  }
+
+  h3 {
+    font-size: 1.5rem;
   }
 }
 
@@ -62,4 +71,26 @@ a:hover {
 ::selection {
   color: white;
   background-color: var(--faded-color);
+}
+
+code {
+  background-color: var(--raised-background);
+  padding-inline: 4px;
+}
+
+figure {
+  margin: 0px;
+}
+
+figcaption {
+  font-style: italic;
+  color: var(--faded-color);
+}
+
+.gist-data * {
+  background-color: var(--raised-background);
+}
+
+.gist-meta {
+  display: none;
 }

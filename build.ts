@@ -15,6 +15,7 @@ const POST_OUTPUT = path.join(OUT_DIR, "posts");
 interface IPost {
   title: string;
   body: string;
+  time: string; // YYYY-MM-DD
   slug: string;
 }
 
@@ -32,12 +33,14 @@ class PostParser {
 
     let title = "Untitled";
     let slug = path.parse(this.relative_path).name;
+    let time = "1999-01-01";
 
     let body = await new HTMLRewriter()
       .on("c-post", {
         element(element) {
           title = element.getAttribute("title") || title;
           slug = element.getAttribute("slug") || slug;
+          time = element.getAttribute("time") || time;
 
           element.removeAndKeepContent();
         },
@@ -45,7 +48,7 @@ class PostParser {
       .transform(new Response(file_contents))
       .text();
 
-    return { title, body, slug };
+    return { title, body, time, slug };
   }
 }
 
@@ -81,13 +84,21 @@ class PostGenerator {
   }
 }
 
+const POST_INDEX_ITEM = (post: IPost): string => {
+  let time = new Date(post.time).toLocaleDateString("en-us", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+
+  return `<li><a href="/posts/${post.slug}">${post.title} &nbsp;&#151;&nbsp; ${time}</a></li>`;
+};
+
 let CPostIndex = {
   element(element: HTMLRewriterTypes.Element) {
-    let innner_content = posts
-      .map((post) => `<li><a href="/posts/${post.slug}">${post.title}</a></li>`)
-      .join("\n");
+    let inner_content = posts.map(POST_INDEX_ITEM).join("\n");
 
-    element.setInnerContent(innner_content, { html: true });
+    element.setInnerContent(inner_content, { html: true });
     element.removeAttribute("slot");
   },
 };
@@ -110,7 +121,9 @@ async function generate_posts_array() {
     posts.push(post);
   }
 
-  return posts;
+  return posts.sort(
+    (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()
+  );
 }
 
 let posts = await generate_posts_array();

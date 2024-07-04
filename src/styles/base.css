@@ -72,25 +72,3 @@ a:hover {
   color: white;
   background-color: var(--faded-color);
 }
-
-code {
-  background-color: var(--raised-background);
-  padding-inline: 4px;
-}
-
-figure {
-  margin: 0px;
-}
-
-figcaption {
-  font-style: italic;
-  color: var(--faded-color);
-}
-
-.gist-data * {
-  background-color: var(--raised-background);
-}
-
-.gist-meta {
-  display: none;
-}

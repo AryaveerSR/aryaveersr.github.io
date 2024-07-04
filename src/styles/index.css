@@ -23,3 +23,25 @@ footer {
 p {
   text-align: left;
 }
+
+code {
+  background-color: var(--raised-background);
+  padding-inline: 4px;
+}
+
+figure {
+  margin: 0px;
+}
+
+figcaption {
+  font-style: italic;
+  color: var(--faded-color);
+}
+
+.gist-data * {
+  background-color: var(--raised-background);
+}
+
+.gist-meta {
+  display: none;
+}

@@ -12,9 +12,6 @@ const POSTS_DIR = path.join(__dirname, "posts");
 const POST_TEMPLATE = path.join(SRC_DIR, "posts", "_post.html");
 const POST_OUTPUT = path.join(OUT_DIR, "posts");
 
-const POST_INDEX = path.join(SRC_DIR, "posts", "_index.html");
-const POST_INDEX_OUTPUT = path.join(OUT_DIR, "posts", "index.html");
-
 interface IPost {
   title: string;
   body: string;

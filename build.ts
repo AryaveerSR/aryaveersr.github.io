@@ -83,6 +83,31 @@ class PostGenerator {
   }
 }
 
+let CPostIndex = {
+  element(element: HTMLRewriterTypes.Element) {
+    let innner_content = posts
+      .map((post) => `<li><a href="/posts/${post.slug}">${post.title}</a></li>`)
+      .join("\n");
+
+    element.setInnerContent(innner_content, { html: true });
+    element.removeAttribute("slot");
+  },
+};
+
+async function generate_posts_array() {
+  let posts_paths = await fs.readdir(POSTS_DIR);
+  let posts: IPost[] = [];
+
+  for (const relative_path of posts_paths) {
+    let post = await new PostParser(relative_path).parse();
+    posts.push(post);
+  }
+
+  return posts;
+}
+
+let posts = await generate_posts_array();
+
 namespace Build {
   async function process_route(relative_path: string) {
     let absolute_path = path.join(SRC_DIR, relative_path);
@@ -91,68 +116,43 @@ namespace Build {
     if (stat.isDirectory()) {
       let dir = await fs.readdir(absolute_path);
       dir.forEach((item) => process_route(path.join(relative_path, item)));
-    } else {
-      let path_name = path.parse(relative_path).name;
-      if (path_name[0] == "_") return;
 
+      return;
+    }
+
+    let file_path = path.parse(relative_path);
+    if (file_path.name[0] == "_") return;
+
+    if (file_path.ext !== ".html") {
       Bun.write(
         path.join(OUT_DIR, relative_path),
         Bun.file(path.join(SRC_DIR, relative_path))
       );
+
+      return;
     }
+
+    build_html(relative_path);
+  }
+
+  export async function build_html(relative_path: string) {
+    let file_contents = await Bun.file(
+      path.join(SRC_DIR, relative_path)
+    ).text();
+
+    let output_contents = await new HTMLRewriter()
+      .on(`[slot="post-index"]`, CPostIndex)
+      .transform(new Response(file_contents))
+      .text();
+
+    Bun.write(path.join(OUT_DIR, relative_path), output_contents);
   }
 
   export async function generate_posts() {
     let post_generator = new PostGenerator();
     await post_generator.init();
 
-    let posts = await fs.readdir(POSTS_DIR);
-
-    posts.forEach((relative_path) =>
-      generate_post(post_generator, relative_path)
-    );
-  }
-
-  export async function generate_post(
-    post_generator: PostGenerator,
-    relative_path: string
-  ) {
-    let post = await new PostParser(relative_path).parse();
-    post_generator.generate_post(post);
-  }
-
-  async function get_posts() {
-    let posts = await fs.readdir(POSTS_DIR);
-    let posts_array: IPost[] = [];
-
-    for (const relative_path of posts) {
-      let post = await new PostParser(relative_path).parse();
-      posts_array.push(post);
-    }
-
-    return posts_array;
-  }
-
-  export async function generate_post_index() {
-    let posts = await get_posts();
-
-    let html = posts
-      .map((post) => `<li><a href="/posts/${post.slug}">${post.title}</a></li>`)
-      .join("\n");
-
-    let template = await Bun.file(POST_INDEX).text();
-
-    let file_contents = await new HTMLRewriter()
-      .on("c-posts", {
-        element(element) {
-          element.setInnerContent(html, { html: true });
-          element.removeAndKeepContent();
-        },
-      })
-      .transform(new Response(template))
-      .text();
-
-    await Bun.write(POST_INDEX_OUTPUT, file_contents);
+    posts.forEach((post) => post_generator.generate_post(post));
   }
 
   export async function build() {
@@ -160,13 +160,23 @@ namespace Build {
 
     await process_route(".");
     await generate_posts();
-    await generate_post_index();
   }
 }
 
 namespace Watch {
-  async function serve_path(route: string): Promise<Response | null> {
-    if (!(await fs.exists(route))) return null;
+  async function serve_path(route: string): Promise<Response> {
+    if (!(await fs.exists(route))) {
+      if (await fs.exists(`${route}.html`)) {
+        return serve_path(`${route}.html`);
+      }
+
+      return new Response(Bun.file(path.join(OUT_DIR, "404.html")), {
+        status: 404,
+        headers: {
+          "Content-Type": "text/html",
+        },
+      });
+    }
 
     if ((await fs.stat(route)).isDirectory()) {
       return serve_path(path.join(route, "index.html"));
@@ -195,16 +205,9 @@ namespace Watch {
     Bun.serve({
       async fetch(req) {
         let path_name = new URL(req.url).pathname;
-        let route = path.join(SRC_DIR, path_name);
+        let route = path.join(OUT_DIR, path_name);
 
-        if (path_name.startsWith("/posts")) {
-          route = path.join(OUT_DIR, path_name);
-        }
-
-        let response = await serve_path(route);
-        if (response) return response;
-
-        return new Response("404", { status: 404 });
+        return await serve_path(route);
       },
 
       port: LIVE_SERVER_PORT,
@@ -212,53 +215,40 @@ namespace Watch {
   }
 
   async function start_live_reload() {
-    await Build.generate_posts();
-    await Build.generate_post_index();
-
     let server = Bun.serve({
       fetch(req, server) {
-        if (server.upgrade(req)) {
-          return;
+        if (!server.upgrade(req)) {
+          return new Response("Upgrade failed", { status: 500 });
         }
-
-        return new Response("Upgrade failed", { status: 500 });
       },
       websocket: {
         message() {},
-        open(ws) {
-          ws.subscribe("live_reload");
-        },
+        open: (ws) => ws.subscribe("live_reload"),
       },
       port: WEB_SOCKET_PORT,
     });
-
-    let post_generator = new PostGenerator();
-    await post_generator.init();
 
     fs_watch(SRC_DIR, { recursive: true }, async (_, filename) => {
       let file_name = path.parse(filename!).name;
       if (file_name == "_post") {
         await Build.generate_posts();
-
-        post_generator = new PostGenerator();
-        await post_generator.init();
-      } else if (file_name == "_index") {
-        await Build.generate_post_index();
       }
 
       server.publish("live_reload", `reload`);
     });
 
     fs_watch(POSTS_DIR, async (_, filename) => {
-      if (!filename) return;
+      posts = await generate_posts_array();
+      await Build.generate_posts();
 
-      await Build.generate_post(post_generator, filename!);
+      await Build.build_html(path.join("posts", "index.html"));
+
       server.publish("live_reload", `reload`);
     });
   }
 
   export async function watch() {
-    await fs.rm(OUT_DIR, { recursive: true, force: true });
+    await Build.build();
 
     start_file_server();
     await start_live_reload();

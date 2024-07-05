@@ -12,6 +12,8 @@ const POSTS_DIR = path.join(__dirname, "posts");
 const POST_TEMPLATE = path.join(SRC_DIR, "posts", "_post.html");
 const POST_OUTPUT = path.join(OUT_DIR, "posts");
 
+const ROOT_URL = "https://aryaveersr.github.io";
+
 interface IPost {
   title: string;
   body: string;
@@ -52,6 +54,7 @@ class PostParser {
   }
 }
 
+// todo! refactor
 class PostGenerator {
   template_contents: string;
 
@@ -81,6 +84,56 @@ class PostGenerator {
     let output_path = path.join(POST_OUTPUT, `${post.slug}.html`);
 
     await Bun.write(output_path, file_contents);
+  }
+}
+
+// refactor
+class MetaGenerator {
+  async generate_robots_txt() {
+    let contents = `Sitemap: ${ROOT_URL}/sitemap.xml`;
+    Bun.write(path.join(OUT_DIR, "robots.txt"), contents);
+  }
+
+  async process_path(relative_path: string): Promise<string[]> {
+    let absolute_path = path.join(OUT_DIR, relative_path);
+    let stat = await fs.stat(absolute_path);
+
+    if (stat.isDirectory()) {
+      let dir = await fs.readdir(absolute_path);
+
+      let returned_array: string[][] = [];
+
+      for (const item of dir) {
+        let x = await this.process_path(path.join(relative_path, item));
+        returned_array.push(x);
+      }
+
+      return returned_array.flat();
+    }
+
+    let file_path = path.parse(relative_path);
+    if (file_path.ext !== ".html") return [];
+
+    if (file_path.name == "index") {
+      return [`/${file_path.dir}`];
+    } else if (file_path.dir == "") {
+      return [`/${file_path.name}`];
+    } else {
+      return [`/${file_path.dir}/${file_path.name}`];
+    }
+  }
+
+  async generate_sitemap() {
+    let paths = await this.process_path(".");
+    paths = paths.map(
+      (rel_path) => `<url><loc>${ROOT_URL}${rel_path}</loc></url>`
+    );
+
+    let result = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${paths.join(
+      "\n"
+    )}</urlset>`;
+
+    Bun.write(path.join(OUT_DIR, "sitemap.xml"), result);
   }
 }
 
@@ -280,6 +333,13 @@ namespace Watch {
   if (arg == "watch") {
     await Watch.watch();
   } else {
-    await Build.build();
+    Build.build().then(() =>
+      setTimeout(async () => {
+        // todo! fix
+        let meta_generator = new MetaGenerator();
+        await meta_generator.generate_robots_txt();
+        await meta_generator.generate_sitemap();
+      }, 1000)
+    );
   }
 })();
